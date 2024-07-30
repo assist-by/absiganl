@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package signal;
+
+option go_package = "github.com/Lux-N-Sal/autro-signal/proto";
+
+service SignalService {
+  rpc SendSignal (SignalRequest) returns (SignalResponse) {}
+}
+
+message SignalRequest {
+  string signal = 1;
+  SignalConditions conditions = 2;
+  int64 timestamp = 3;
+  string price = 4;
+}
+
+message SignalConditions {
+  repeated bool long = 1;
+  repeated bool short = 2;
+}
+
+message SignalResponse {
+  bool success = 1;
+  string message = 2;
+}
