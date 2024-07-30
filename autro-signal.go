@@ -1,15 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"time"
-
-	notification "autro-signal/notification"
 
 	"github.com/IBM/sarama"
 	"github.com/joho/godotenv"
@@ -44,14 +44,27 @@ type SignalConditions struct {
 	Short [3]bool
 }
 
+type SignalData struct {
+	Signal     string           `json:"signal"`
+	Conditions SignalConditions `json:"conditions"`
+	Timestamp  int64            `json:"timestamp"`
+	Price      string           `json:"price"`
+}
+
 var (
-	kafkaBroker string
+	kafkaBroker   string
+	apiGatewayURL string
+	httpClient    = &http.Client{Timeout: 10 * time.Second}
 )
 
 func init() {
 	kafkaBroker = os.Getenv("KAFKA_BROKER")
 	if kafkaBroker == "" {
 		kafkaBroker = "localhost:29092"
+	}
+	apiGatewayURL = os.Getenv("API_GATEWAY_URL")
+	if apiGatewayURL == "" {
+		apiGatewayURL = "http://api-gateway:8080/signal"
 	}
 }
 
@@ -197,16 +210,35 @@ func generateSignal(candles []CandleData, indicators TechnicalIndicators) (strin
 	return "NO SIGNAL", conditions
 }
 
+func sendSignalToAPIGateway(signal SignalData) error {
+	jsonPayload, err := json.Marshal(signal)
+	if err != nil {
+		return fmt.Errorf("error marshalling signal data: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", apiGatewayURL, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error sending request to API Gateway: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code from API Gateway: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Printf("Error loading .env file")
-		panic(err)
-	}
-
-	err = notification.InitNotifications()
-	if err != nil {
-		fmt.Printf("Error initializing notifications: %v", err)
 		panic(err)
 	}
 
@@ -241,45 +273,21 @@ func main() {
 					continue
 				}
 
-				signal, conditions := generateSignal(candles, indicators)
+				signalType, conditions := generateSignal(candles, indicators)
 				lastCandle := candles[len(candles)-1]
 
-				discordColor, slackColor := notification.GetColorForSignal(signal)
-
-				description := fmt.Sprintf("Signal: %s for BTCUSDT at %v\n\n"+
-					"LONG  - CASE 1: %t, CASE 2: %t, CASE 3: %t\n"+
-					"SHORT - CASE 1: %t, CASE 2: %t, CASE 3: %t",
-					signal, time.Unix(lastCandle.OpenTime/1000, 0),
-					conditions.Long[0], conditions.Long[1], conditions.Long[2],
-					conditions.Short[0], conditions.Short[1], conditions.Short[2])
-
-				discordEmbed := notification.Embed{
-					Title:       fmt.Sprintf("New Signal: %s", signal),
-					Description: description,
-					Color:       discordColor,
+				signalData := SignalData{
+					Signal:     signalType,
+					Conditions: conditions,
+					Timestamp:  lastCandle.OpenTime,
+					Price:      lastCandle.Close,
 				}
 
-				slackAttachment := notification.Attachment{
-					Color: slackColor,
-					Text:  description,
+				if err := sendSignalToAPIGateway(signalData); err != nil {
+					fmt.Printf("Error sending signal to API Gateway: %v\n", err)
+				} else {
+					fmt.Printf("Signal sent to API Gateway: %+v\n", signalData)
 				}
-
-				if err := notification.SendDiscordAlert(discordEmbed); err != nil {
-					fmt.Printf("Error sending Discord alert: %v\n", err)
-				}
-
-				if err := notification.SendSlackAlert(slackAttachment); err != nil {
-					fmt.Printf("Error sending Slack alert: %v\n", err)
-				}
-
-				fmt.Printf("Signal: %s\n", signal)
-				fmt.Printf("Latest candle - Open Time: %v, Close: %s\n",
-					time.Unix(lastCandle.OpenTime/1000, 0), lastCandle.Close)
-				fmt.Printf("LONG  - CASE 1: %t, CASE 2: %t, CASE 3: %t\n",
-					conditions.Long[0], conditions.Long[1], conditions.Long[2])
-				fmt.Printf("SHORT - CASE 1: %t, CASE 2: %t, CASE 3: %t\n",
-					conditions.Short[0], conditions.Short[1], conditions.Short[2])
-				fmt.Println("------------------------")
 			}
 
 		case err := <-partitionConsumer.Errors():
