@@ -14,6 +14,7 @@ import (
 	"github.com/IBM/sarama"
 	pb "github.com/Lux-N-Sal/autro-signal/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -177,7 +178,6 @@ func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 }
 
 // signal 생성 함수
-
 func generateSignal(candles []CandleData, indicators TechnicalIndicators) (string, SignalConditions) {
 	lastPrice, _ := strconv.ParseFloat(candles[len(candles)-1].Close, 64)
 	lastHigh, _ := strconv.ParseFloat(candles[len(candles)-1].High, 64)
@@ -213,12 +213,17 @@ func main() {
 	}
 	defer consumer.Close()
 
-	conn, err := grpc.Dial(apiGatewayAddr, grpc.WithInsecure())
+	conn, err := grpc.NewClient(apiGatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to connect to API Gateway: %v", err)
+		log.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer conn.Close()
+
 	client := pb.NewSignalServiceClient(conn)
+
+	// 연결 상태 확인
+	state := conn.GetState()
+	log.Printf("Initial gRPC connection state: %s", state)
 
 	partitionConsumer, err := consumer.ConsumePartition(kafkaTopic, 0, sarama.OffsetNewest)
 	if err != nil {
