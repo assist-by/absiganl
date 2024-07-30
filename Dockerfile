@@ -2,12 +2,20 @@ FROM golang:1.22-alpine
 
 WORKDIR /app
 
+# Copy go mod and sum files
 COPY go.mod go.sum ./
+
+# Download all dependencies
 RUN go mod download
 
-# 전체 consumer 디렉토리 내용을 복사
+# Copy the source from the current directory to the working Directory inside the container
 COPY . .
 
-RUN go build -o autro-signal
+# Build the Go app
+RUN go build -o main .
 
-CMD ["./autro-signal"]
+# Expose port 8080 to the outside world
+EXPOSE 8080
+
+# Command to run the executable
+CMD ["./main"]
