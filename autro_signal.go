@@ -1,18 +1,19 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
-	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/joho/godotenv"
+	pb "github.com/Lux-N-Sal/autro-signal/proto"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -44,27 +45,19 @@ type SignalConditions struct {
 	Short [3]bool
 }
 
-type SignalData struct {
-	Signal     string           `json:"signal"`
-	Conditions SignalConditions `json:"conditions"`
-	Timestamp  int64            `json:"timestamp"`
-	Price      string           `json:"price"`
-}
-
 var (
-	kafkaBroker   string
-	apiGatewayURL string
-	httpClient    = &http.Client{Timeout: 10 * time.Second}
+	kafkaBroker    string
+	apiGatewayAddr string
 )
 
 func init() {
 	kafkaBroker = os.Getenv("KAFKA_BROKER")
 	if kafkaBroker == "" {
-		kafkaBroker = "localhost:29092"
+		kafkaBroker = "kafka:9092"
 	}
-	apiGatewayURL = os.Getenv("API_GATEWAY_URL")
-	if apiGatewayURL == "" {
-		apiGatewayURL = "http://api-gateway:8080/signal"
+	apiGatewayAddr = os.Getenv("API_GATEWAY_ADDR")
+	if apiGatewayAddr == "" {
+		apiGatewayAddr = "api-gateway:50051"
 	}
 }
 
@@ -184,6 +177,7 @@ func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 }
 
 // signal 생성 함수
+
 func generateSignal(candles []CandleData, indicators TechnicalIndicators) (string, SignalConditions) {
 	lastPrice, _ := strconv.ParseFloat(candles[len(candles)-1].Close, 64)
 	lastHigh, _ := strconv.ParseFloat(candles[len(candles)-1].High, 64)
@@ -210,90 +204,77 @@ func generateSignal(candles []CandleData, indicators TechnicalIndicators) (strin
 	return "NO SIGNAL", conditions
 }
 
-func sendSignalToAPIGateway(signal SignalData) error {
-	jsonPayload, err := json.Marshal(signal)
-	if err != nil {
-		return fmt.Errorf("error marshalling signal data: %v", err)
-	}
-
-	req, err := http.NewRequest("POST", apiGatewayURL, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return fmt.Errorf("error creating request: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error sending request to API Gateway: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code from API Gateway: %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Printf("Error loading .env file")
-		panic(err)
-	}
+	log.Println("Starting Signal Service...")
 
 	consumer, err := connectConsumer([]string{kafkaBroker})
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to connect to Kafka: %v", err)
 	}
 	defer consumer.Close()
 
+	conn, err := grpc.Dial(apiGatewayAddr, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Failed to connect to API Gateway: %v", err)
+	}
+	defer conn.Close()
+	client := pb.NewSignalServiceClient(conn)
+
 	partitionConsumer, err := consumer.ConsumePartition(kafkaTopic, 0, sarama.OffsetNewest)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create partition consumer: %v", err)
 	}
 	defer partitionConsumer.Close()
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
 
+	log.Println("Signal Service is now running. Press CTRL-C to exit.")
+
 	for {
 		select {
 		case msg := <-partitionConsumer.Messages():
 			var candles []CandleData
 			if err := json.Unmarshal(msg.Value, &candles); err != nil {
-				fmt.Printf("Error unmarshalling message: %v\n", err)
+				log.Printf("Error unmarshalling message: %v\n", err)
 				continue
 			}
 
 			if len(candles) == 300 {
 				indicators, err := calculateIndicators(candles)
 				if err != nil {
-					fmt.Printf("Error calculating indicators: %v\n", err)
+					log.Printf("Error calculating indicators: %v\n", err)
 					continue
 				}
 
 				signalType, conditions := generateSignal(candles, indicators)
 				lastCandle := candles[len(candles)-1]
 
-				signalData := SignalData{
-					Signal:     signalType,
-					Conditions: conditions,
-					Timestamp:  lastCandle.OpenTime,
-					Price:      lastCandle.Close,
+				signalReq := &pb.SignalRequest{
+					Signal:    signalType,
+					Timestamp: lastCandle.CloseTime,
+					Price:     lastCandle.Close,
+					Conditions: &pb.SignalConditions{
+						Long:  conditions.Long[:],
+						Short: conditions.Short[:],
+					},
 				}
 
-				if err := sendSignalToAPIGateway(signalData); err != nil {
-					fmt.Printf("Error sending signal to API Gateway: %v\n", err)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				resp, err := client.SendSignal(ctx, signalReq)
+				cancel()
+				if err != nil {
+					log.Printf("Error sending signal to API Gateway: %v", err)
 				} else {
-					fmt.Printf("Signal sent to API Gateway: %+v\n", signalData)
+					log.Printf("Signal sent to API Gateway. Response: %v", resp)
 				}
 			}
 
 		case err := <-partitionConsumer.Errors():
-			fmt.Printf("Error: %v\n", err)
+			log.Printf("Error from partition consumer: %v\n", err)
 
 		case <-signals:
+			log.Println("Interrupt is detected. Gracefully shutting down...")
 			return
 		}
 	}
