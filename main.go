@@ -83,7 +83,7 @@ func connectConsumer(brokers []string) (sarama.Consumer, error) {
 	return nil, fmt.Errorf("failed to connect to Kafka after %d attempts", maxRetries)
 }
 
-// / EMA200 계산
+// EMA 계산 float 반환
 func calculateEMA(prices []float64, period int) float64 {
 	k := 2.0 / float64(period+1)
 	ema := prices[0]
@@ -93,12 +93,35 @@ func calculateEMA(prices []float64, period int) float64 {
 	return ema
 }
 
+// EMA 계산 slice 반환
+func calculateEMASlice(prices []float64, period int) []float64 {
+	k := 2.0 / float64(period+1)
+	ema := make([]float64, len(prices))
+	ema[0] = prices[0]
+	for i := 1; i < len(prices); i++ {
+		ema[i] = prices[i]*k + ema[i-1]*(1-k)
+	}
+	return ema
+}
+
 // / MACD 계산
 func calculateMACD(prices []float64) (float64, float64) {
+	if len(prices) < 26 {
+		return 0, 0 // Not enough data
+	}
+
 	ema12 := calculateEMA(prices, 12)
 	ema26 := calculateEMA(prices, 26)
 	macd := ema12 - ema26
-	signal := calculateEMA([]float64{macd}, 9)
+
+	ema12Slice := calculateEMASlice(prices, 12)
+	ema26Slice := calculateEMASlice(prices, 26)
+	macdSlice := make([]float64, len(prices))
+	for i := 0; i < len(prices); i++ {
+		macdSlice[i] = ema12Slice[i] - ema26Slice[i]
+	}
+
+	signal := calculateEMA(macdSlice, 9)
 	return macd, signal
 }
 
@@ -195,8 +218,8 @@ func generateSignal(candles []CandleData, indicators TechnicalIndicators) (strin
 			{Condition: indicators.ParabolicSAR < lastLow, Value: lastLow - indicators.ParabolicSAR},
 		},
 		Short: [3]SignalCondition{
-			{Condition: lastPrice < indicators.EMA200, Value: indicators.EMA200 - lastPrice},
-			{Condition: indicators.MACD < indicators.Signal, Value: indicators.Signal - indicators.MACD},
+			{Condition: lastPrice < indicators.EMA200, Value: lastPrice - indicators.EMA200},
+			{Condition: indicators.MACD < indicators.Signal, Value: indicators.MACD - indicators.Signal},
 			{Condition: indicators.ParabolicSAR > lastHigh, Value: indicators.ParabolicSAR - lastHigh},
 		},
 	}
