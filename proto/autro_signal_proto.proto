@@ -16,8 +16,13 @@ message SignalRequest {
 }
 
 message SignalConditions {
-  repeated bool long = 1;
-  repeated bool short = 2;
+  repeated SignalConditionDetail long = 1;
+  repeated SignalConditionDetail short = 2;
+}
+
+message SignalConditionDetail {
+  bool condition = 1;
+  double value = 2;
 }
 
 message SignalResponse {

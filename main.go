@@ -41,9 +41,14 @@ type TechnicalIndicators struct {
 	ParabolicSAR float64
 }
 
+type SignalCondition struct {
+	Condition bool
+	Value     float64
+}
+
 type SignalConditions struct {
-	Long  [3]bool
-	Short [3]bool
+	Long  [3]SignalCondition
+	Short [3]SignalCondition
 }
 
 var (
@@ -184,21 +189,21 @@ func generateSignal(candles []CandleData, indicators TechnicalIndicators) (strin
 	lastLow, _ := strconv.ParseFloat(candles[len(candles)-1].Low, 64)
 
 	conditions := SignalConditions{
-		Long: [3]bool{
-			lastPrice > indicators.EMA200,
-			indicators.MACD > indicators.Signal,
-			indicators.ParabolicSAR < lastLow,
+		Long: [3]SignalCondition{
+			{Condition: lastPrice > indicators.EMA200, Value: lastPrice - indicators.EMA200},
+			{Condition: indicators.MACD > indicators.Signal, Value: indicators.MACD - indicators.Signal},
+			{Condition: indicators.ParabolicSAR < lastLow, Value: lastLow - indicators.ParabolicSAR},
 		},
-		Short: [3]bool{
-			lastPrice < indicators.EMA200,
-			indicators.MACD < indicators.Signal,
-			indicators.ParabolicSAR > lastHigh,
+		Short: [3]SignalCondition{
+			{Condition: lastPrice < indicators.EMA200, Value: indicators.EMA200 - lastPrice},
+			{Condition: indicators.MACD < indicators.Signal, Value: indicators.Signal - indicators.MACD},
+			{Condition: indicators.ParabolicSAR > lastHigh, Value: indicators.ParabolicSAR - lastHigh},
 		},
 	}
 
-	if conditions.Long[0] && conditions.Long[1] && conditions.Long[2] {
+	if conditions.Long[0].Condition && conditions.Long[1].Condition && conditions.Long[2].Condition {
 		return "LONG", conditions
-	} else if conditions.Short[0] && conditions.Short[1] && conditions.Short[2] {
+	} else if conditions.Short[0].Condition && conditions.Short[1].Condition && conditions.Short[2].Condition {
 		return "SHORT", conditions
 	}
 	return "NO SIGNAL", conditions
@@ -260,8 +265,16 @@ func main() {
 					Timestamp: lastCandle.CloseTime,
 					Price:     lastCandle.Close,
 					Conditions: &pb.SignalConditions{
-						Long:  conditions.Long[:],
-						Short: conditions.Short[:],
+						Long: []*pb.SignalConditionDetail{
+							{Condition: conditions.Long[0].Condition, Value: conditions.Long[0].Value},
+							{Condition: conditions.Long[1].Condition, Value: conditions.Long[1].Value},
+							{Condition: conditions.Long[2].Condition, Value: conditions.Long[2].Value},
+						},
+						Short: []*pb.SignalConditionDetail{
+							{Condition: conditions.Short[0].Condition, Value: conditions.Short[0].Value},
+							{Condition: conditions.Short[1].Condition, Value: conditions.Short[1].Value},
+							{Condition: conditions.Short[2].Condition, Value: conditions.Short[2].Value},
+						},
 					},
 				}
 
