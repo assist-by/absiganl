@@ -9,12 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"time"
 
-	pb "github.com/Lux-N-Sal/autro-signal/proto"
 	"github.com/segmentio/kafka-go"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type CandleData struct {
@@ -45,10 +41,17 @@ type SignalConditions struct {
 	Short [3]SignalCondition
 }
 
+type SignalResult struct {
+	Signal     string
+	Timestamp  int64
+	Price      string
+	Conditions SignalConditions
+}
+
 var (
-	kafkaBroker    string
-	kafkaTopic     string
-	apiGatewayAddr string
+	kafkaBroker              string
+	kafkaTopicFromPrice      string
+	kafkaTopicToNotification string
 )
 
 func init() {
@@ -56,13 +59,14 @@ func init() {
 	if kafkaBroker == "" {
 		kafkaBroker = "kafka:9092"
 	}
-	apiGatewayAddr = os.Getenv("API_GATEWAY_ADDR")
-	if apiGatewayAddr == "" {
-		apiGatewayAddr = "api-gateway:50051"
+
+	kafkaTopicFromPrice = os.Getenv("KAFKA_TOPIC_FROM_PRICE")
+	if kafkaTopicFromPrice == "" {
+		kafkaTopicFromPrice = "price-to-signal"
 	}
-	kafkaTopic = os.Getenv("KAFKA_TOPIC")
-	if kafkaTopic == "" {
-		kafkaTopic = "price-to-signal" // 기본값 설정
+	kafkaTopicToNotification = os.Getenv("KAFKA_TOPIC_TO_NOTIFICATION")
+	if kafkaTopicToNotification == "" {
+		kafkaTopicToNotification = "signal-to-notification"
 	}
 }
 
@@ -70,9 +74,30 @@ func init() {
 func createReader() *kafka.Reader {
 	return kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     []string{kafkaBroker},
-		Topic:       kafkaTopic,
+		Topic:       kafkaTopicFromPrice,
 		MaxAttempts: 5,
 	})
+}
+
+func createWriter() *kafka.Writer {
+	return kafka.NewWriter(kafka.WriterConfig{
+		Brokers:     []string{kafkaBroker},
+		Topic:       kafkaTopicToNotification,
+		MaxAttempts: 5,
+	})
+}
+
+func writeToKafka(writer *kafka.Writer, signalReuslt SignalResult) error {
+	value, err := json.Marshal(signalReuslt)
+	if err != nil {
+		return fmt.Errorf("error marshalling signal result: %v", err)
+	}
+
+	err = writer.WriteMessages(context.Background(), kafka.Message{
+		Value: value,
+	})
+
+	return err
 }
 
 // EMA 계산 float 반환
@@ -230,17 +255,8 @@ func main() {
 	reader := createReader()
 	defer reader.Close()
 
-	conn, err := grpc.NewClient(apiGatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Failed to create gRPC client: %v", err)
-	}
-	defer conn.Close()
-
-	client := pb.NewSignalServiceClient(conn)
-
-	// 연결 상태 확인
-	state := conn.GetState()
-	log.Printf("Initial gRPC connection state: %s", state)
+	writer := createWriter()
+	defer writer.Close()
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
@@ -275,31 +291,19 @@ func main() {
 				signalType, conditions := generateSignal(candles, indicators)
 				lastCandle := candles[len(candles)-1]
 
-				signalReq := &pb.SignalRequest{
-					Signal:    signalType,
-					Timestamp: lastCandle.CloseTime,
-					Price:     lastCandle.Close,
-					Conditions: &pb.SignalConditions{
-						Long: []*pb.SignalConditionDetail{
-							{Condition: conditions.Long[0].Condition, Value: conditions.Long[0].Value},
-							{Condition: conditions.Long[1].Condition, Value: conditions.Long[1].Value},
-							{Condition: conditions.Long[2].Condition, Value: conditions.Long[2].Value},
-						},
-						Short: []*pb.SignalConditionDetail{
-							{Condition: conditions.Short[0].Condition, Value: conditions.Short[0].Value},
-							{Condition: conditions.Short[1].Condition, Value: conditions.Short[1].Value},
-							{Condition: conditions.Short[2].Condition, Value: conditions.Short[2].Value},
-						},
-					},
+				signalResult := SignalResult{
+					Signal:     signalType,
+					Timestamp:  lastCandle.CloseTime,
+					Price:      lastCandle.Close,
+					Conditions: conditions,
 				}
 
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-				resp, err := client.SendSignal(ctx, signalReq)
-				cancel()
+				err = writeToKafka(writer, signalResult)
+
 				if err != nil {
 					log.Printf("Error sending signal to API Gateway: %v", err)
 				} else {
-					log.Printf("Signal sent to API Gateway. Response: %v", resp)
+					log.Printf("Signal sent to API Gateway. Response: %v", signalResult)
 				}
 			}
 		}
