@@ -67,7 +67,7 @@ func init() {
 }
 
 // / consumer와 연결함수
-func connectConsumer() *kafka.Reader {
+func createReader() *kafka.Reader {
 	return kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     []string{kafkaBroker},
 		Topic:       kafkaTopic,
@@ -227,8 +227,8 @@ func generateSignal(candles []CandleData, indicators TechnicalIndicators) (strin
 func main() {
 	log.Println("Starting Signal Service...")
 
-	consumer := connectConsumer()
-	defer consumer.Close()
+	reader := createReader()
+	defer reader.Close()
 
 	conn, err := grpc.NewClient(apiGatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -254,7 +254,7 @@ func main() {
 			return
 
 		default:
-			msg, err := consumer.ReadMessage(context.Background())
+			msg, err := reader.ReadMessage(context.Background())
 			if err != nil {
 				log.Printf("Error reading message: %v\n", err)
 			}
