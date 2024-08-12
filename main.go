@@ -17,12 +17,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const (
-	kafkaTopic = "btcusdt-1m-candles"
-	maxRetries = 5
-	retryDelay = 5 * time.Second
-)
-
 type CandleData struct {
 	OpenTime                 int64
 	Open, High, Low, Close   string
@@ -53,6 +47,7 @@ type SignalConditions struct {
 
 var (
 	kafkaBroker    string
+	kafkaTopic     string
 	apiGatewayAddr string
 )
 
@@ -64,6 +59,10 @@ func init() {
 	apiGatewayAddr = os.Getenv("API_GATEWAY_ADDR")
 	if apiGatewayAddr == "" {
 		apiGatewayAddr = "api-gateway:50051"
+	}
+	kafkaTopic = os.Getenv("KAFKA_TOPIC")
+	if kafkaTopic == "" {
+		kafkaTopic = "price-to-signal" // 기본값 설정
 	}
 }
 
