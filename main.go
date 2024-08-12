@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/IBM/sarama"
 	pb "github.com/Lux-N-Sal/autro-signal/proto"
+	"github.com/segmentio/kafka-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -68,19 +68,12 @@ func init() {
 }
 
 // / consumer와 연결함수
-func connectConsumer(brokers []string) (sarama.Consumer, error) {
-	config := sarama.NewConfig()
-	config.Consumer.Return.Errors = true
-
-	for i := 0; i < maxRetries; i++ {
-		consumer, err := sarama.NewConsumer(brokers, config)
-		if err == nil {
-			return consumer, nil
-		}
-		fmt.Printf("Failed to connect to Kafka, retrying in %v... (attempt %d/%d)\n", retryDelay, i+1, maxRetries)
-		time.Sleep(retryDelay)
-	}
-	return nil, fmt.Errorf("failed to connect to Kafka after %d attempts", maxRetries)
+func connectConsumer() *kafka.Reader {
+	return kafka.NewReader(kafka.ReaderConfig{
+		Brokers:     []string{kafkaBroker},
+		Topic:       kafkaTopic,
+		MaxAttempts: 5,
+	})
 }
 
 // EMA 계산 float 반환
@@ -235,10 +228,7 @@ func generateSignal(candles []CandleData, indicators TechnicalIndicators) (strin
 func main() {
 	log.Println("Starting Signal Service...")
 
-	consumer, err := connectConsumer([]string{kafkaBroker})
-	if err != nil {
-		log.Fatalf("Failed to connect to Kafka: %v", err)
-	}
+	consumer := connectConsumer()
 	defer consumer.Close()
 
 	conn, err := grpc.NewClient(apiGatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -253,12 +243,6 @@ func main() {
 	state := conn.GetState()
 	log.Printf("Initial gRPC connection state: %s", state)
 
-	partitionConsumer, err := consumer.ConsumePartition(kafkaTopic, 0, sarama.OffsetNewest)
-	if err != nil {
-		log.Fatalf("Failed to create partition consumer: %v", err)
-	}
-	defer partitionConsumer.Close()
-
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
 
@@ -266,7 +250,16 @@ func main() {
 
 	for {
 		select {
-		case msg := <-partitionConsumer.Messages():
+		case <-signals:
+			log.Println("Interrupt is detected. Gracefully shutting down...")
+			return
+
+		default:
+			msg, err := consumer.ReadMessage(context.Background())
+			if err != nil {
+				log.Printf("Error reading message: %v\n", err)
+			}
+
 			var candles []CandleData
 			if err := json.Unmarshal(msg.Value, &candles); err != nil {
 				log.Printf("Error unmarshalling message: %v\n", err)
@@ -310,13 +303,6 @@ func main() {
 					log.Printf("Signal sent to API Gateway. Response: %v", resp)
 				}
 			}
-
-		case err := <-partitionConsumer.Errors():
-			log.Printf("Error from partition consumer: %v\n", err)
-
-		case <-signals:
-			log.Println("Interrupt is detected. Gracefully shutting down...")
-			return
 		}
 	}
 }
