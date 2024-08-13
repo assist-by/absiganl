@@ -44,7 +44,7 @@ type SignalConditions struct {
 type SignalResult struct {
 	Signal     string
 	Timestamp  int64
-	Price      string
+	Price      float64
 	StopLoss   float64
 	TakeProfie float64
 	Conditions SignalConditions
@@ -298,11 +298,16 @@ func main() {
 
 				signalType, conditions, stopLoss, takeProfit := generateSignal(candles, indicators)
 				lastCandle := candles[len(candles)-1]
+				price, err := strconv.ParseFloat(lastCandle.Close, 64)
+				if err != nil {
+					log.Printf("Error convert price to float: %v\n", err)
+					continue
+				}
 
 				signalResult := SignalResult{
 					Signal:     signalType,
 					Timestamp:  lastCandle.CloseTime,
-					Price:      lastCandle.Close,
+					Price:      price,
 					Conditions: conditions,
 					StopLoss:   stopLoss,
 					TakeProfie: takeProfit,
