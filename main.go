@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"os/signal"
 	"strconv"
 
+	calculate "github.com/Lux-N-Sal/autro-signal/calculate"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -102,86 +102,6 @@ func writeToKafka(writer *kafka.Writer, signalReuslt SignalResult) error {
 	return err
 }
 
-// EMA 계산 float 반환
-func calculateEMA(prices []float64, period int) float64 {
-	k := 2.0 / float64(period+1)
-	ema := prices[0]
-	for i := 1; i < len(prices); i++ {
-		ema = prices[i]*k + ema*(1-k)
-	}
-	return ema
-}
-
-// EMA 계산 slice 반환
-func calculateEMASlice(prices []float64, period int) []float64 {
-	k := 2.0 / float64(period+1)
-	ema := make([]float64, len(prices))
-	ema[0] = prices[0]
-	for i := 1; i < len(prices); i++ {
-		ema[i] = prices[i]*k + ema[i-1]*(1-k)
-	}
-	return ema
-}
-
-// / MACD 계산
-func calculateMACD(prices []float64) (float64, float64) {
-	if len(prices) < 26 {
-		return 0, 0 // Not enough data
-	}
-
-	ema12 := calculateEMA(prices, 12)
-	ema26 := calculateEMA(prices, 26)
-	macd := ema12 - ema26
-
-	ema12Slice := calculateEMASlice(prices, 12)
-	ema26Slice := calculateEMASlice(prices, 26)
-	macdSlice := make([]float64, len(prices))
-	for i := 0; i < len(prices); i++ {
-		macdSlice[i] = ema12Slice[i] - ema26Slice[i]
-	}
-
-	signal := calculateEMA(macdSlice, 9)
-	return macd, signal
-}
-
-// / Parabolic SAR 계산
-func calculateParabolicSAR(highs, lows []float64) float64 {
-	af := 0.02
-	maxAf := 0.2
-	sar := lows[0]
-	ep := highs[0]
-	isLong := true
-
-	for i := 1; i < len(highs); i++ {
-		if isLong {
-			sar = sar + af*(ep-sar)
-			if highs[i] > ep {
-				ep = highs[i]
-				af = math.Min(af+0.02, maxAf)
-			}
-			if sar > lows[i] {
-				isLong = false
-				sar = ep
-				ep = lows[i]
-				af = 0.02
-			}
-		} else {
-			sar = sar - af*(sar-ep)
-			if lows[i] < ep {
-				ep = lows[i]
-				af = math.Min(af+0.02, maxAf)
-			}
-			if sar < highs[i] {
-				isLong = true
-				sar = ep
-				ep = highs[i]
-				af = 0.02
-			}
-		}
-	}
-	return sar
-}
-
 // / 보조 지표 계산
 func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 	if len(candles) < 300 {
@@ -212,9 +132,9 @@ func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 		lows[i] = low
 	}
 
-	ema200 := calculateEMA(prices, 200)
-	macd, signal := calculateMACD(prices)
-	parabolicSAR := calculateParabolicSAR(highs, lows)
+	ema200 := calculate.CalculateEMA(prices, 200)
+	macd, signal := calculate.CalculateMACD(prices)
+	parabolicSAR := calculate.CalculateParabolicSAR(highs, lows)
 
 	return TechnicalIndicators{
 		EMA200:       ema200,
