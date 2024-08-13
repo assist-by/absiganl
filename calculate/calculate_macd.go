@@ -1,6 +1,6 @@
 package calculate
 
-// / MACD 계산
+/// MACD 계산
 func CalculateMACD(prices []float64) (float64, float64) {
 	if len(prices) < 26 {
 		return 0, 0 // Not enough data
@@ -8,7 +8,7 @@ func CalculateMACD(prices []float64) (float64, float64) {
 
 	ema12 := CalculateEMA(prices, 12)
 	ema26 := CalculateEMA(prices, 26)
-	macd := ema12 - ema26
+	macdLine := ema12 - ema26
 
 	ema12Slice := CalculateEMASlice(prices, 12)
 	ema26Slice := CalculateEMASlice(prices, 26)
@@ -17,6 +17,6 @@ func CalculateMACD(prices []float64) (float64, float64) {
 		macdSlice[i] = ema12Slice[i] - ema26Slice[i]
 	}
 
-	signal := CalculateEMA(macdSlice, 9)
-	return macd, signal
+	signalLine := CalculateEMA(macdSlice, 9)
+	return macdLine, signalLine
 }

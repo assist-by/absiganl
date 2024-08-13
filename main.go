@@ -25,10 +25,12 @@ type CandleData struct {
 }
 
 type TechnicalIndicators struct {
-	EMA200       float64
-	MACD         float64
-	Signal       float64
-	ParabolicSAR float64
+	EMA200         float64
+	ParabolicSAR   float64
+	MACDLine       float64
+	SignalLine     float64
+	PrevMACDLine   float64
+	PrevSignalLine float64
 }
 
 type SignalCondition struct {
@@ -133,14 +135,17 @@ func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 	}
 
 	ema200 := calculate.CalculateEMA(prices, 200)
-	macd, signal := calculate.CalculateMACD(prices)
+	macdLine, signalLine := calculate.CalculateMACD(prices)
+	prevmacdLine, prevsignalLine := calculate.CalculateMACD(prices[:len(prices)-1])
 	parabolicSAR := calculate.CalculateParabolicSAR(highs, lows)
 
 	return TechnicalIndicators{
-		EMA200:       ema200,
-		MACD:         macd,
-		Signal:       signal,
-		ParabolicSAR: parabolicSAR,
+		EMA200:         ema200,
+		ParabolicSAR:   parabolicSAR,
+		MACDLine:       macdLine,
+		SignalLine:     signalLine,
+		PrevMACDLine:   prevmacdLine,
+		PrevSignalLine: prevsignalLine,
 	}, nil
 }
 
@@ -153,12 +158,12 @@ func generateSignal(candles []CandleData, indicators TechnicalIndicators) (strin
 	conditions := SignalConditions{
 		Long: [3]SignalCondition{
 			{Condition: lastPrice > indicators.EMA200, Value: lastPrice - indicators.EMA200},
-			{Condition: indicators.MACD > indicators.Signal, Value: indicators.MACD - indicators.Signal},
+			{Condition: indicators.MACDLine > indicators.SignalLine && indicators.PrevMACDLine <= indicators.PrevSignalLine, Value: indicators.MACDLine - indicators.SignalLine},
 			{Condition: indicators.ParabolicSAR < lastLow, Value: lastLow - indicators.ParabolicSAR},
 		},
 		Short: [3]SignalCondition{
 			{Condition: lastPrice < indicators.EMA200, Value: lastPrice - indicators.EMA200},
-			{Condition: indicators.MACD < indicators.Signal, Value: indicators.MACD - indicators.Signal},
+			{Condition: indicators.MACDLine < indicators.SignalLine && indicators.PrevMACDLine >= indicators.PrevSignalLine, Value: indicators.MACDLine - indicators.SignalLine},
 			{Condition: indicators.ParabolicSAR > lastHigh, Value: indicators.ParabolicSAR - lastHigh},
 		},
 	}
