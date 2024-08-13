@@ -45,6 +45,8 @@ type SignalResult struct {
 	Signal     string
 	Timestamp  int64
 	Price      string
+	StopLoss   float64
+	TakeProfie float64
 	Conditions SignalConditions
 }
 
@@ -223,7 +225,7 @@ func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 }
 
 // signal 생성 함수
-func generateSignal(candles []CandleData, indicators TechnicalIndicators) (string, SignalConditions) {
+func generateSignal(candles []CandleData, indicators TechnicalIndicators) (string, SignalConditions, float64, float64) {
 	lastPrice, _ := strconv.ParseFloat(candles[len(candles)-1].Close, 64)
 	lastHigh, _ := strconv.ParseFloat(candles[len(candles)-1].High, 64)
 	lastLow, _ := strconv.ParseFloat(candles[len(candles)-1].Low, 64)
@@ -241,12 +243,18 @@ func generateSignal(candles []CandleData, indicators TechnicalIndicators) (strin
 		},
 	}
 
+	var stopLoss, takeProfit float64
+
 	if conditions.Long[0].Condition && conditions.Long[1].Condition && conditions.Long[2].Condition {
-		return "LONG", conditions
+		stopLoss = indicators.ParabolicSAR
+		takeProfit = lastPrice + (lastPrice - stopLoss)
+		return "LONG", conditions, stopLoss, takeProfit
 	} else if conditions.Short[0].Condition && conditions.Short[1].Condition && conditions.Short[2].Condition {
-		return "SHORT", conditions
+		stopLoss = indicators.ParabolicSAR
+		takeProfit = lastPrice - (stopLoss - lastPrice)
+		return "SHORT", conditions, stopLoss, takeProfit
 	}
-	return "NO SIGNAL", conditions
+	return "NO SIGNAL", conditions, 0.0, 0.0
 }
 
 func main() {
@@ -288,7 +296,7 @@ func main() {
 					continue
 				}
 
-				signalType, conditions := generateSignal(candles, indicators)
+				signalType, conditions, stopLoss, takeProfit := generateSignal(candles, indicators)
 				lastCandle := candles[len(candles)-1]
 
 				signalResult := SignalResult{
@@ -296,6 +304,8 @@ func main() {
 					Timestamp:  lastCandle.CloseTime,
 					Price:      lastCandle.Close,
 					Conditions: conditions,
+					StopLoss:   stopLoss,
+					TakeProfie: takeProfit,
 				}
 
 				err = writeToKafka(writer, signalResult)
