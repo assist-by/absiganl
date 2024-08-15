@@ -14,40 +14,6 @@ import (
 	calculate "github.com/with-autro/autro-signal/calculate"
 )
 
-type SignalCondition struct {
-	Condition bool
-	Value     float64
-}
-
-// type lib.SignalConditions struct {
-// 	Long  lib.SignalDetail
-// 	Short lib.SignalDetail
-// }
-
-// type lib.SignalDetail struct {
-// 	EMA200Condition       bool
-// 	ParabolicSARCondition bool
-// 	MACDCondition         bool
-// 	EMA200Value           float64
-// 	EMA200Diff            float64
-// 	ParabolicSARValue     float64
-// 	ParabolicSARDiff      float64
-// 	MACDNowMACDLine       float64
-// 	MACDNowSignalLine     float64
-// 	MACDPrevMACDLine      float64
-// 	MACDPrevSignalLine    float64
-// 	MACDHistogram         float64
-// }
-
-// type lib.SignalResult struct {
-// 	Signal     string
-// 	Timestamp  int64
-// 	Price      float64
-// 	StopLoss   float64
-// 	TakeProfie float64
-// 	Conditions lib.SignalConditions
-// }
-
 var (
 	kafkaBroker              string
 	kafkaTopicFromPrice      string
@@ -150,19 +116,6 @@ func generateSignal(candles []lib.CandleData, indicators lib.TechnicalIndicators
 	lastPrice, _ := strconv.ParseFloat(candles[len(candles)-1].Close, 64)
 	lastHigh, _ := strconv.ParseFloat(candles[len(candles)-1].High, 64)
 	lastLow, _ := strconv.ParseFloat(candles[len(candles)-1].Low, 64)
-
-	// conditions := lib.SignalConditions{
-	// 	Long: [3]SignalCondition{
-	// 		{Condition: lastPrice > indicators.EMA200, Value: lastPrice - indicators.EMA200},
-	// 		{Condition: indicators.MACDLine > indicators.SignalLine && indicators.PrevMACDLine <= indicators.PrevSignalLine, Value: indicators.MACDLine - indicators.SignalLine},
-	// 		{Condition: indicators.ParabolicSAR < lastLow, Value: lastLow - indicators.ParabolicSAR},
-	// 	},
-	// 	Short: [3]SignalCondition{
-	// 		{Condition: lastPrice < indicators.EMA200, Value: lastPrice - indicators.EMA200},
-	// 		{Condition: indicators.MACDLine < indicators.SignalLine && indicators.PrevMACDLine >= indicators.PrevSignalLine, Value: indicators.MACDLine - indicators.SignalLine},
-	// 		{Condition: indicators.ParabolicSAR > lastHigh, Value: indicators.ParabolicSAR - lastHigh},
-	// 	},
-	// }
 
 	conditions := lib.SignalConditions{
 		Long: lib.SignalDetail{
