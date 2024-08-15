@@ -222,9 +222,9 @@ func main() {
 				err = writeToKafka(writer, signalResult)
 
 				if err != nil {
-					log.Printf("Error sending signal to API Gateway: %v", err)
+					log.Printf("Error sending signal to autro-notification: %v", err)
 				} else {
-					log.Printf("Signal sent to API Gateway. Response: %v", signalResult)
+					log.Printf("Signal sent to autro-notification. Response: %v", signalResult)
 				}
 			}
 		}
