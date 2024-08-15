@@ -9,8 +9,8 @@ import (
 	"os/signal"
 	"strconv"
 
-	calculate "github.com/Lux-N-Sal/autro-signal/calculate"
 	"github.com/segmentio/kafka-go"
+	calculate "github.com/with-autro/autro-signal/calculate"
 )
 
 type CandleData struct {
