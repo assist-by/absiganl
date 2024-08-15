@@ -10,47 +10,43 @@ import (
 	"strconv"
 
 	"github.com/segmentio/kafka-go"
+	lib "github.com/with-autro/autro-library"
 	calculate "github.com/with-autro/autro-signal/calculate"
 )
-
-type CandleData struct {
-	OpenTime                 int64
-	Open, High, Low, Close   string
-	Volume                   string
-	CloseTime                int64
-	QuoteAssetVolume         string
-	NumberOfTrades           int
-	TakerBuyBaseAssetVolume  string
-	TakerBuyQuoteAssetVolume string
-}
-
-type TechnicalIndicators struct {
-	EMA200         float64
-	ParabolicSAR   float64
-	MACDLine       float64
-	SignalLine     float64
-	PrevMACDLine   float64
-	PrevSignalLine float64
-}
 
 type SignalCondition struct {
 	Condition bool
 	Value     float64
 }
 
-type SignalConditions struct {
-	Long  [3]SignalCondition
-	Short [3]SignalCondition
-}
+// type lib.SignalConditions struct {
+// 	Long  lib.SignalDetail
+// 	Short lib.SignalDetail
+// }
 
-type SignalResult struct {
-	Signal     string
-	Timestamp  int64
-	Price      float64
-	StopLoss   float64
-	TakeProfie float64
-	Conditions SignalConditions
-}
+// type lib.SignalDetail struct {
+// 	EMA200Condition       bool
+// 	ParabolicSARCondition bool
+// 	MACDCondition         bool
+// 	EMA200Value           float64
+// 	EMA200Diff            float64
+// 	ParabolicSARValue     float64
+// 	ParabolicSARDiff      float64
+// 	MACDNowMACDLine       float64
+// 	MACDNowSignalLine     float64
+// 	MACDPrevMACDLine      float64
+// 	MACDPrevSignalLine    float64
+// 	MACDHistogram         float64
+// }
+
+// type lib.SignalResult struct {
+// 	Signal     string
+// 	Timestamp  int64
+// 	Price      float64
+// 	StopLoss   float64
+// 	TakeProfie float64
+// 	Conditions lib.SignalConditions
+// }
 
 var (
 	kafkaBroker              string
@@ -91,7 +87,7 @@ func createWriter() *kafka.Writer {
 	})
 }
 
-func writeToKafka(writer *kafka.Writer, signalReuslt SignalResult) error {
+func writeToKafka(writer *kafka.Writer, signalReuslt lib.SignalResult) error {
 	value, err := json.Marshal(signalReuslt)
 	if err != nil {
 		return fmt.Errorf("error marshalling signal result: %v", err)
@@ -105,9 +101,9 @@ func writeToKafka(writer *kafka.Writer, signalReuslt SignalResult) error {
 }
 
 // / 보조 지표 계산
-func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
+func calculateIndicators(candles []lib.CandleData) (lib.TechnicalIndicators, error) {
 	if len(candles) < 300 {
-		return TechnicalIndicators{}, fmt.Errorf("insufficient data: need at least 300 candles, got %d", len(candles))
+		return lib.TechnicalIndicators{}, fmt.Errorf("insufficient data: need at least 300 candles, got %d", len(candles))
 	}
 
 	prices := make([]float64, len(candles))
@@ -117,19 +113,19 @@ func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 	for i, candle := range candles {
 		price, err := strconv.ParseFloat(candle.Close, 64)
 		if err != nil {
-			return TechnicalIndicators{}, fmt.Errorf("error parsing close price: %v", err)
+			return lib.TechnicalIndicators{}, fmt.Errorf("error parsing close price: %v", err)
 		}
 		prices[i] = price
 
 		high, err := strconv.ParseFloat(candle.High, 64)
 		if err != nil {
-			return TechnicalIndicators{}, fmt.Errorf("error parsing high price: %v", err)
+			return lib.TechnicalIndicators{}, fmt.Errorf("error parsing high price: %v", err)
 		}
 		highs[i] = high
 
 		low, err := strconv.ParseFloat(candle.Low, 64)
 		if err != nil {
-			return TechnicalIndicators{}, fmt.Errorf("error parsing low price: %v", err)
+			return lib.TechnicalIndicators{}, fmt.Errorf("error parsing low price: %v", err)
 		}
 		lows[i] = low
 	}
@@ -139,7 +135,7 @@ func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 	prevmacdLine, prevsignalLine := calculate.CalculateMACD(prices[:len(prices)-1])
 	parabolicSAR := calculate.CalculateParabolicSAR(highs, lows)
 
-	return TechnicalIndicators{
+	return lib.TechnicalIndicators{
 		EMA200:         ema200,
 		ParabolicSAR:   parabolicSAR,
 		MACDLine:       macdLine,
@@ -150,31 +146,62 @@ func calculateIndicators(candles []CandleData) (TechnicalIndicators, error) {
 }
 
 // signal 생성 함수
-func generateSignal(candles []CandleData, indicators TechnicalIndicators) (string, SignalConditions, float64, float64) {
+func generateSignal(candles []lib.CandleData, indicators lib.TechnicalIndicators) (string, lib.SignalConditions, float64, float64) {
 	lastPrice, _ := strconv.ParseFloat(candles[len(candles)-1].Close, 64)
 	lastHigh, _ := strconv.ParseFloat(candles[len(candles)-1].High, 64)
 	lastLow, _ := strconv.ParseFloat(candles[len(candles)-1].Low, 64)
 
-	conditions := SignalConditions{
-		Long: [3]SignalCondition{
-			{Condition: lastPrice > indicators.EMA200, Value: lastPrice - indicators.EMA200},
-			{Condition: indicators.MACDLine > indicators.SignalLine && indicators.PrevMACDLine <= indicators.PrevSignalLine, Value: indicators.MACDLine - indicators.SignalLine},
-			{Condition: indicators.ParabolicSAR < lastLow, Value: lastLow - indicators.ParabolicSAR},
+	// conditions := lib.SignalConditions{
+	// 	Long: [3]SignalCondition{
+	// 		{Condition: lastPrice > indicators.EMA200, Value: lastPrice - indicators.EMA200},
+	// 		{Condition: indicators.MACDLine > indicators.SignalLine && indicators.PrevMACDLine <= indicators.PrevSignalLine, Value: indicators.MACDLine - indicators.SignalLine},
+	// 		{Condition: indicators.ParabolicSAR < lastLow, Value: lastLow - indicators.ParabolicSAR},
+	// 	},
+	// 	Short: [3]SignalCondition{
+	// 		{Condition: lastPrice < indicators.EMA200, Value: lastPrice - indicators.EMA200},
+	// 		{Condition: indicators.MACDLine < indicators.SignalLine && indicators.PrevMACDLine >= indicators.PrevSignalLine, Value: indicators.MACDLine - indicators.SignalLine},
+	// 		{Condition: indicators.ParabolicSAR > lastHigh, Value: indicators.ParabolicSAR - lastHigh},
+	// 	},
+	// }
+
+	conditions := lib.SignalConditions{
+		Long: lib.SignalDetail{
+			EMA200Condition:       lastPrice > indicators.EMA200,
+			ParabolicSARCondition: indicators.ParabolicSAR < lastLow,
+			MACDCondition:         indicators.MACDLine > indicators.SignalLine && indicators.PrevMACDLine <= indicators.PrevSignalLine,
+			EMA200Value:           indicators.EMA200,
+			EMA200Diff:            lastPrice - indicators.EMA200,
+			ParabolicSARValue:     indicators.ParabolicSAR,
+			ParabolicSARDiff:      lastLow - indicators.ParabolicSAR,
+			MACDNowMACDLine:       indicators.MACDLine,
+			MACDNowSignalLine:     indicators.SignalLine,
+			MACDPrevMACDLine:      indicators.PrevMACDLine,
+			MACDPrevSignalLine:    indicators.PrevSignalLine,
+			MACDHistogram:         indicators.MACDLine - indicators.SignalLine,
 		},
-		Short: [3]SignalCondition{
-			{Condition: lastPrice < indicators.EMA200, Value: lastPrice - indicators.EMA200},
-			{Condition: indicators.MACDLine < indicators.SignalLine && indicators.PrevMACDLine >= indicators.PrevSignalLine, Value: indicators.MACDLine - indicators.SignalLine},
-			{Condition: indicators.ParabolicSAR > lastHigh, Value: indicators.ParabolicSAR - lastHigh},
+		Short: lib.SignalDetail{
+			EMA200Condition:       lastPrice < indicators.EMA200,
+			ParabolicSARCondition: indicators.ParabolicSAR > lastHigh,
+			MACDCondition:         indicators.MACDLine < indicators.SignalLine && indicators.PrevMACDLine >= indicators.PrevSignalLine,
+			EMA200Value:           indicators.EMA200,
+			EMA200Diff:            lastPrice - indicators.EMA200,
+			ParabolicSARValue:     indicators.ParabolicSAR,
+			ParabolicSARDiff:      indicators.ParabolicSAR - lastHigh,
+			MACDNowMACDLine:       indicators.MACDLine,
+			MACDNowSignalLine:     indicators.SignalLine,
+			MACDPrevMACDLine:      indicators.PrevMACDLine,
+			MACDPrevSignalLine:    indicators.PrevSignalLine,
+			MACDHistogram:         indicators.MACDLine - indicators.SignalLine,
 		},
 	}
 
 	var stopLoss, takeProfit float64
 
-	if conditions.Long[0].Condition && conditions.Long[1].Condition && conditions.Long[2].Condition {
+	if conditions.Long.EMA200Condition && conditions.Long.ParabolicSARCondition && conditions.Long.MACDCondition {
 		stopLoss = indicators.ParabolicSAR
 		takeProfit = lastPrice + (lastPrice - stopLoss)
 		return "LONG", conditions, stopLoss, takeProfit
-	} else if conditions.Short[0].Condition && conditions.Short[1].Condition && conditions.Short[2].Condition {
+	} else if conditions.Short.EMA200Condition && conditions.Short.ParabolicSARCondition && conditions.Short.MACDCondition {
 		stopLoss = indicators.ParabolicSAR
 		takeProfit = lastPrice - (stopLoss - lastPrice)
 		return "SHORT", conditions, stopLoss, takeProfit
@@ -208,7 +235,7 @@ func main() {
 				log.Printf("Error reading message: %v\n", err)
 			}
 
-			var candles []CandleData
+			var candles []lib.CandleData
 			if err := json.Unmarshal(msg.Value, &candles); err != nil {
 				log.Printf("Error unmarshalling message: %v\n", err)
 				continue
@@ -229,7 +256,7 @@ func main() {
 					continue
 				}
 
-				signalResult := SignalResult{
+				signalResult := lib.SignalResult{
 					Signal:     signalType,
 					Timestamp:  lastCandle.CloseTime,
 					Price:      price,
