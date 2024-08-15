@@ -11,6 +11,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	lib "github.com/with-autro/autro-library"
+	signalType "github.com/with-autro/autro-library/signal_type"
 	calculate "github.com/with-autro/autro-signal/calculate"
 )
 
@@ -153,13 +154,13 @@ func generateSignal(candles []lib.CandleData, indicators lib.TechnicalIndicators
 	if conditions.Long.EMA200Condition && conditions.Long.ParabolicSARCondition && conditions.Long.MACDCondition {
 		stopLoss = indicators.ParabolicSAR
 		takeProfit = lastPrice + (lastPrice - stopLoss)
-		return "LONG", conditions, stopLoss, takeProfit
+		return signalType.Long.String(), conditions, stopLoss, takeProfit
 	} else if conditions.Short.EMA200Condition && conditions.Short.ParabolicSARCondition && conditions.Short.MACDCondition {
 		stopLoss = indicators.ParabolicSAR
 		takeProfit = lastPrice - (stopLoss - lastPrice)
-		return "SHORT", conditions, stopLoss, takeProfit
+		return signalType.Short.String(), conditions, stopLoss, takeProfit
 	}
-	return "NO SIGNAL", conditions, 0.0, 0.0
+	return signalType.No_Signal.String(), conditions, 0.0, 0.0
 }
 
 func main() {
