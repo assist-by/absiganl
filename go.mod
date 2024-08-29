@@ -4,7 +4,7 @@ go 1.22.5
 
 require (
 	github.com/segmentio/kafka-go v0.4.47
-	github.com/with-autro/autro-library v0.1.3
+	github.com/with-autro/autro-library v0.1.5
 )
 
 require (

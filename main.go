@@ -19,6 +19,9 @@ var (
 	kafkaBroker              string
 	kafkaTopicFromPrice      string
 	kafkaTopicToNotification string
+	registrationTopic        string
+	host                     string
+	port                     string
 )
 
 func init() {
@@ -35,9 +38,22 @@ func init() {
 	if kafkaTopicToNotification == "" {
 		kafkaTopicToNotification = "signal-to-notification"
 	}
+	registrationTopic = os.Getenv("REGISTRATION_TOPIC")
+	if registrationTopic == "" {
+		registrationTopic = "service-registration"
+	}
+	host = os.Getenv("HOST")
+	if host == "" {
+		host = "autro-signal"
+	}
+	port = os.Getenv("PORT")
+	if port == "" {
+		port = "50052"
+	}
+
 }
 
-// / consumer와 연결함수
+// consumer와 연결함수
 func createReader() *kafka.Reader {
 	return kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     []string{kafkaBroker},
@@ -46,6 +62,7 @@ func createReader() *kafka.Reader {
 	})
 }
 
+// producer 생성
 func createWriter() *kafka.Writer {
 	return kafka.NewWriter(kafka.WriterConfig{
 		Brokers:     []string{kafkaBroker},
@@ -65,6 +82,41 @@ func writeToKafka(writer *kafka.Writer, signalReuslt lib.SignalResult) error {
 	})
 
 	return err
+}
+
+// Service Discovery에 등록하는 함수
+func registerService(writer *kafka.Writer) error {
+	service := lib.Service{
+		Name:    "autro-signal",
+		Address: fmt.Sprintf("%s:%s", host, port),
+	}
+
+	jsonData, err := json.Marshal(service)
+	if err != nil {
+		return fmt.Errorf("error marshaling service data: %v", err)
+	}
+
+	err = writer.WriteMessages(context.Background(), kafka.Message{
+		Key:   []byte(service.Name),
+		Value: jsonData,
+	})
+
+	if err != nil {
+		return fmt.Errorf("error sending registration message: %v", err)
+	}
+
+	log.Println("Service registration message sent successfully")
+	return nil
+}
+
+// 서비스 등록 kafka producer 생성
+func createRegistrationWriter() *kafka.Writer {
+	return kafka.NewWriter(
+		kafka.WriterConfig{
+			Brokers:     []string{kafkaBroker},
+			Topic:       registrationTopic,
+			MaxAttempts: 5,
+		})
 }
 
 // / 보조 지표 계산
@@ -166,11 +218,22 @@ func generateSignal(candles []lib.CandleData, indicators lib.TechnicalIndicators
 func main() {
 	log.Println("Starting Signal Service...")
 
+	// 가격 read consumer
 	reader := createReader()
 	defer reader.Close()
 
+	// signal write producer
 	writer := createWriter()
 	defer writer.Close()
+
+	// service register producer
+	registrationWriter := createRegistrationWriter()
+	defer registrationWriter.Close()
+
+	// register service
+	if err := registerService(registrationWriter); err != nil {
+		log.Printf("Failed to register service: %v\n", err)
+	}
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
