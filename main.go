@@ -151,16 +151,13 @@ func calculateIndicators(candles []lib.CandleData) (lib.TechnicalIndicators, err
 
 	ema200 := calculate.CalculateEMA(prices, 200)
 	macdLine, signalLine := calculate.CalculateMACD(prices)
-	prevmacdLine, prevsignalLine := calculate.CalculateMACD(prices[:len(prices)-1])
 	parabolicSAR := calculate.CalculateParabolicSAR(highs, lows)
 
 	return lib.TechnicalIndicators{
-		EMA200:         ema200,
-		ParabolicSAR:   parabolicSAR,
-		MACDLine:       macdLine,
-		SignalLine:     signalLine,
-		PrevMACDLine:   prevmacdLine,
-		PrevSignalLine: prevsignalLine,
+		EMA200:       ema200,
+		ParabolicSAR: parabolicSAR,
+		MACDLine:     macdLine,
+		SignalLine:   signalLine,
 	}, nil
 }
 
@@ -174,30 +171,24 @@ func generateSignal(candles []lib.CandleData, indicators lib.TechnicalIndicators
 		Long: lib.SignalDetail{
 			EMA200Condition:       lastPrice > indicators.EMA200,
 			ParabolicSARCondition: indicators.ParabolicSAR < lastLow,
-			MACDCondition:         indicators.MACDLine > indicators.SignalLine && indicators.PrevMACDLine <= indicators.PrevSignalLine,
+			MACDCondition:         indicators.MACDLine > indicators.SignalLine,
 			EMA200Value:           indicators.EMA200,
 			EMA200Diff:            lastPrice - indicators.EMA200,
 			ParabolicSARValue:     indicators.ParabolicSAR,
 			ParabolicSARDiff:      lastLow - indicators.ParabolicSAR,
-			MACDNowMACDLine:       indicators.MACDLine,
-			MACDNowSignalLine:     indicators.SignalLine,
-			MACDPrevMACDLine:      indicators.PrevMACDLine,
-			MACDPrevSignalLine:    indicators.PrevSignalLine,
-			MACDHistogram:         indicators.MACDLine - indicators.SignalLine,
+
+			MACDHistogram: indicators.MACDLine - indicators.SignalLine,
 		},
 		Short: lib.SignalDetail{
 			EMA200Condition:       lastPrice < indicators.EMA200,
 			ParabolicSARCondition: indicators.ParabolicSAR > lastHigh,
-			MACDCondition:         indicators.MACDLine < indicators.SignalLine && indicators.PrevMACDLine >= indicators.PrevSignalLine,
+			MACDCondition:         indicators.MACDLine < indicators.SignalLine,
 			EMA200Value:           indicators.EMA200,
 			EMA200Diff:            lastPrice - indicators.EMA200,
 			ParabolicSARValue:     indicators.ParabolicSAR,
 			ParabolicSARDiff:      indicators.ParabolicSAR - lastHigh,
-			MACDNowMACDLine:       indicators.MACDLine,
-			MACDNowSignalLine:     indicators.SignalLine,
-			MACDPrevMACDLine:      indicators.PrevMACDLine,
-			MACDPrevSignalLine:    indicators.PrevSignalLine,
-			MACDHistogram:         indicators.MACDLine - indicators.SignalLine,
+
+			MACDHistogram: indicators.MACDLine - indicators.SignalLine,
 		},
 	}
 
