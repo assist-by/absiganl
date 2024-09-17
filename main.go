@@ -48,7 +48,7 @@ func init() {
 	}
 	port = os.Getenv("PORT")
 	if port == "" {
-		port = "50052"
+		port = "50053"
 	}
 
 }
@@ -276,9 +276,9 @@ func main() {
 				err = writeToKafka(writer, signalResult)
 
 				if err != nil {
-					log.Printf("Error sending signal to autro-notification: %v", err)
+					log.Printf("Error sending signal to abnotification: %v", err)
 				} else {
-					log.Printf("Signal sent to autro-notification. Response: %v", signalResult)
+					log.Printf("Signal sent to abnotification. Response: %v", signalResult)
 				}
 			}
 		}
