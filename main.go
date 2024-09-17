@@ -9,10 +9,10 @@ import (
 	"os/signal"
 	"strconv"
 
+	lib "github.com/assist-by/autro-library"
+	signalType "github.com/assist-by/autro-library/signal_type"
+	calculate "github.com/assist-by/autro-signal/calculate"
 	"github.com/segmentio/kafka-go"
-	lib "github.com/with-autro/autro-library"
-	signalType "github.com/with-autro/autro-library/signal_type"
-	calculate "github.com/with-autro/autro-signal/calculate"
 )
 
 var (
