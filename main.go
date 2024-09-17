@@ -44,7 +44,7 @@ func init() {
 	}
 	host = os.Getenv("HOST")
 	if host == "" {
-		host = "autro-signal"
+		host = "absignal"
 	}
 	port = os.Getenv("PORT")
 	if port == "" {
@@ -87,7 +87,7 @@ func writeToKafka(writer *kafka.Writer, signalReuslt lib.SignalResult) error {
 // Service Discovery에 등록하는 함수
 func registerService(writer *kafka.Writer) error {
 	service := lib.Service{
-		Name:    "autro-signal",
+		Name:    "absignal",
 		Address: fmt.Sprintf("%s:%s", host, port),
 	}
 
