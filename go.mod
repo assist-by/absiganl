@@ -1,4 +1,4 @@
-module github.com/assist-by/autro-signal
+module github.com/assist-by/absignal
 
 go 1.22.5
 

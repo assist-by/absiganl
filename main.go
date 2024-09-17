@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"strconv"
 
+	calculate "github.com/assist-by/absignal/calculate"
 	lib "github.com/assist-by/autro-library"
 	signalType "github.com/assist-by/autro-library/signal_type"
-	calculate "github.com/assist-by/autro-signal/calculate"
 	"github.com/segmentio/kafka-go"
 )
 
