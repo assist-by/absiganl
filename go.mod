@@ -3,7 +3,7 @@ module github.com/assist-by/absignal
 go 1.22.5
 
 require (
-	github.com/assist-by/autro-library v0.1.9
+	github.com/assist-by/libStruct v0.1.18
 	github.com/segmentio/kafka-go v0.4.47
 )
 

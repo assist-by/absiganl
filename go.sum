@@ -1,5 +1,5 @@
-github.com/assist-by/autro-library v0.1.9 h1:dnhRHPIgzb9sIx2DtIXCXVM1S7rWMD+Ve7GTYR7VwZA=
-github.com/assist-by/autro-library v0.1.9/go.mod h1:kEleJaU7UD39uMutrK3kfXecbCNeCPSJbdYZ0PS4Ub4=
+github.com/assist-by/libStruct v0.1.18 h1:XlCD/1RflRwTDdVn9LzEZ5/xPKsuMirbisFJvwobipE=
+github.com/assist-by/libStruct v0.1.18/go.mod h1:m2xSaOACiKibwSn3Hd9sPdJTm0V2Rpoa7/r5y91CbhM=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
